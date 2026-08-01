@@ -210,10 +210,12 @@ def run_server(host: str, port: int, directory: str):
     handler = lambda *args, **kwargs: WikiFinderHTTPRequestHandler(*args, directory=directory, **kwargs)
     socketserver.TCPServer.allow_reuse_address = True
 
-    for attempt in range(3):
+    for attempt in range(5):
         try:
             with socketserver.TCPServer((host, port), handler) as httpd:
-                logging.info('WikiFinder server running at http://%s:%d', host, port)
+                actual_host, actual_port = httpd.server_address
+                display_host = '127.0.0.1' if actual_host == '0.0.0.0' else actual_host
+                logging.info('WikiFinder server running at http://%s:%d', display_host, actual_port)
                 try:
                     httpd.serve_forever()
                 except KeyboardInterrupt:
@@ -222,11 +224,24 @@ def run_server(host: str, port: int, directory: str):
         except OSError as exc:
             if exc.errno == errno.EADDRINUSE:
                 logging.warning('Port %d is already in use.', port)
-                if attempt == 0:
+                if port != 0:
                     port += 1
                     logging.info('Trying next available port: %d', port)
                     continue
+                raise
             raise
+
+    try:
+        with socketserver.TCPServer((host, 0), handler) as httpd:
+            actual_host, actual_port = httpd.server_address
+            display_host = '127.0.0.1' if actual_host == '0.0.0.0' else actual_host
+            logging.info('WikiFinder server running at http://%s:%d', display_host, actual_port)
+            try:
+                httpd.serve_forever()
+            except KeyboardInterrupt:
+                logging.info('Server stopped by user.')
+    except OSError as exc:
+        raise RuntimeError('Unable to bind the web server on any port.') from exc
 
 
 def parse_args() -> argparse.Namespace:
