@@ -1,7 +1,7 @@
-const MAX_VISITED = 600;
-const MAX_DEPTH = 6;
+const MAX_VISITED = 220;
+const MAX_DEPTH = 4;
 const REQUEST_TIMEOUT_MS = 10000;
-const MAX_LINK_ROUNDS = 50;
+const MAX_LINK_ROUNDS = 20;
 
 const normalizeTitle = (title) => String(title || '').trim().replace(/\s+/g, ' ');
 
@@ -136,6 +136,24 @@ function findDirectLinkPath(startTitle, targetTitle, links) {
   return null;
 }
 
+function scoreCandidate(candidate, targetTitle) {
+  const candidateKey = canonicalKey(candidate);
+  const targetKey = canonicalKey(targetTitle);
+
+  const tokens = targetKey.split(/\s+/).filter(Boolean);
+  const overlap = tokens.filter((token) => candidateKey.includes(token)).length;
+  const exactMatch = candidateKey === targetKey ? 100 : 0;
+  const prefixBonus = targetKey.startsWith(candidateKey) || candidateKey.startsWith(targetKey) ? 20 : 0;
+  return exactMatch + overlap * 25 + prefixBonus;
+}
+
+function rankLinks(links, targetTitle) {
+  return [...links]
+    .map((candidate) => ({ candidate, score: scoreCandidate(candidate, targetTitle) }))
+    .sort((a, b) => b.score - a.score)
+    .map(({ candidate }) => candidate);
+}
+
 async function findShortestPathWithStats(start, target, onProgress = () => {}) {
   const startTitle = await resolveTitle(start);
   const targetTitle = await resolveTitle(target);
@@ -170,8 +188,9 @@ async function findShortestPathWithStats(start, target, onProgress = () => {}) {
     try {
       const links = await fetchLinksFromPage(current);
       let foundTarget = null;
+      const rankedLinks = rankLinks(links, targetTitle);
 
-      links.forEach((candidate) => {
+      rankedLinks.slice(0, 8).forEach((candidate) => {
         const candidateKey = canonicalKey(candidate);
         if (visited.has(candidateKey)) {
           return;
@@ -337,6 +356,7 @@ if (typeof module !== 'undefined' && module.exports) {
     canonicalKey,
     buildPathFromParents,
     findDirectLinkPath,
+    rankLinks,
     findShortestPath,
     findShortestPathWithStats,
     initApp,
@@ -349,6 +369,7 @@ if (typeof window !== 'undefined') {
     canonicalKey,
     buildPathFromParents,
     findDirectLinkPath,
+    rankLinks,
     findShortestPath,
     findShortestPathWithStats,
     initApp,
