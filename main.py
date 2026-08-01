@@ -7,6 +7,7 @@ shortest Wikipedia page paths.
 """
 
 import argparse
+import errno
 import http.server
 import json
 import logging
@@ -208,12 +209,24 @@ def run_server(port: int, directory: str):
     os.chdir(directory)
     handler = lambda *args, **kwargs: WikiFinderHTTPRequestHandler(*args, directory=directory, **kwargs)
     socketserver.TCPServer.allow_reuse_address = True
-    with socketserver.TCPServer(('127.0.0.1', port), handler) as httpd:
-        logging.info('WikiFinder server running at http://127.0.0.1:%d', port)
+
+    for attempt in range(3):
         try:
-            httpd.serve_forever()
-        except KeyboardInterrupt:
-            logging.info('Server stopped by user.')
+            with socketserver.TCPServer(('127.0.0.1', port), handler) as httpd:
+                logging.info('WikiFinder server running at http://127.0.0.1:%d', port)
+                try:
+                    httpd.serve_forever()
+                except KeyboardInterrupt:
+                    logging.info('Server stopped by user.')
+                return
+        except OSError as exc:
+            if exc.errno == errno.EADDRINUSE:
+                logging.warning('Port %d is already in use.', port)
+                if attempt == 0:
+                    port += 1
+                    logging.info('Trying next available port: %d', port)
+                    continue
+            raise
 
 
 def parse_args() -> argparse.Namespace:
