@@ -1,4 +1,6 @@
-const MAX_VISITED = 2200;
+const MAX_VISITED = 120;
+const MAX_DEPTH = 4;
+const REQUEST_TIMEOUT_MS = 10000;
 
 const normalizeTitle = (title) => String(title || '').trim().replace(/\s+/g, ' ');
 
@@ -17,18 +19,30 @@ const wikipediaApiUrl = (params) => {
 };
 
 async function sendWikipediaRequest(params) {
-  const response = await fetch(wikipediaApiUrl({
-    ...params,
-    format: 'json',
-    formatversion: '2',
-    origin: '*',
-  }));
+  const controller = new AbortController();
+  const timeoutId = globalThis.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-  if (!response.ok) {
-    throw new Error('Wikipedia API connection failed.');
+  try {
+    const response = await fetch(wikipediaApiUrl({
+      ...params,
+      format: 'json',
+      formatversion: '2',
+      origin: '*',
+    }), { signal: controller.signal });
+
+    if (!response.ok) {
+      throw new Error('Wikipedia API connection failed.');
+    }
+
+    return response.json();
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new Error('Wikipedia request timed out. Please try again with a simpler pair of pages.');
+    }
+    throw error;
+  } finally {
+    globalThis.clearTimeout(timeoutId);
   }
-
-  return response.json();
 }
 
 async function resolveTitle(title) {
@@ -107,7 +121,21 @@ function buildPathFromParents(target, parents) {
   return path;
 }
 
-async function findShortestPathWithStats(start, target) {
+function findDirectLinkPath(startTitle, targetTitle, links) {
+  if (!Array.isArray(links)) {
+    return null;
+  }
+
+  const normalizedTarget = canonicalKey(targetTitle);
+  const directMatch = links.find((candidate) => canonicalKey(candidate) === normalizedTarget);
+  if (directMatch) {
+    return [startTitle, directMatch];
+  }
+
+  return null;
+}
+
+async function findShortestPathWithStats(start, target, onProgress = () => {}) {
   const startTitle = await resolveTitle(start);
   const targetTitle = await resolveTitle(target);
   const startKey = canonicalKey(startTitle);
@@ -117,42 +145,60 @@ async function findShortestPathWithStats(start, target) {
     return { path: [startTitle], visited: 1 };
   }
 
-  const queue = [startTitle];
+  const startLinks = await fetchLinksFromPage(startTitle);
+  const immediatePath = findDirectLinkPath(startTitle, targetTitle, startLinks);
+  if (immediatePath) {
+    return { path: immediatePath, visited: 1 };
+  }
+
+  const queue = [{ title: startTitle, depth: 0 }];
   const visited = new Set([startKey]);
   const parents = {};
   let visitedCount = 0;
 
   while (queue.length && visitedCount < MAX_VISITED) {
-    const current = queue.shift();
+    const { title: current, depth } = queue.shift();
     visitedCount += 1;
-    const currentKey = canonicalKey(current);
+    onProgress(visitedCount, current);
 
+    const currentKey = canonicalKey(current);
     if (currentKey === targetKey) {
-      break;
+      return { path: buildPathFromParents(current, parents), visited: visitedCount };
     }
 
     try {
       const links = await fetchLinksFromPage(current);
+      let foundTarget = null;
+
       links.forEach((candidate) => {
         const candidateKey = canonicalKey(candidate);
         if (visited.has(candidateKey)) {
           return;
         }
 
+        const nextDepth = depth + 1;
+        if (nextDepth > MAX_DEPTH) {
+          return;
+        }
+
         visited.add(candidateKey);
         parents[candidate] = current;
         if (candidateKey === targetKey) {
-          queue.length = 0;
+          foundTarget = candidate;
           return;
         }
-        queue.push(candidate);
+        queue.push({ title: candidate, depth: nextDepth });
       });
+
+      if (foundTarget) {
+        return { path: buildPathFromParents(foundTarget, parents), visited: visitedCount };
+      }
     } catch (error) {
       throw new Error(`Wikipedia API request failed: ${error.message}`);
     }
   }
 
-  const path = visitedCount > 0 && queue.length === 0 && Object.keys(parents).length > 0
+  const path = visitedCount > 0 && Object.keys(parents).length > 0
     ? buildPathFromParents(targetTitle, parents)
     : [];
 
@@ -238,8 +284,13 @@ function createAppController() {
     pathDisplay.innerHTML = 'Searching for the fastest path...';
 
     try {
-      const result = await findShortestPathWithStats(start, target);
-      updateProgress(result.visited || 0, MAX_VISITED);
+      let progressCount = 0;
+      const result = await findShortestPathWithStats(start, target, (visited, page) => {
+        progressCount = visited;
+        updateProgress(progressCount, MAX_VISITED);
+        setStatus(`Exploring ${page}...`);
+      });
+      updateProgress(result.visited || progressCount, MAX_VISITED);
       appendLog(result.path.length
         ? `Path found in ${result.path.length} steps after checking ${result.visited} pages.`
         : `No path found after checking ${result.visited} pages.`, true);
@@ -284,6 +335,7 @@ if (typeof module !== 'undefined' && module.exports) {
     normalizeTitle,
     canonicalKey,
     buildPathFromParents,
+    findDirectLinkPath,
     findShortestPath,
     findShortestPathWithStats,
     initApp,
@@ -295,6 +347,7 @@ if (typeof window !== 'undefined') {
     normalizeTitle,
     canonicalKey,
     buildPathFromParents,
+    findDirectLinkPath,
     findShortestPath,
     findShortestPathWithStats,
     initApp,
