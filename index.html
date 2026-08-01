@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WikiFinder</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="hero">
+      <div class="hero-badge">WikiFinder</div>
+      <h1>Find the shortest route between Wikipedia pages</h1>
+      <p>Play the ultimate Wiki Game: enter two article titles and watch the path unfold.</p>
+    </header>
+
+    <main class="pane">
+      <section class="input-panel glass">
+        <div class="input-row">
+          <label for="start">Start Page</label>
+          <input id="start" placeholder="e.g. Apple" spellcheck="false" />
+        </div>
+        <div class="input-row">
+          <label for="target">Target Page</label>
+          <input id="target" placeholder="e.g. Space Exploration" spellcheck="false" />
+        </div>
+        <div class="button-row">
+          <button id="findButton" class="primary">Find the path</button>
+          <button id="resetButton" class="secondary">Reset</button>
+        </div>
+        <div class="note">Tip: use plain page titles, not URLs. For example: <strong>Bitcoin</strong>, <strong>Artificial intelligence</strong>, <strong>Leonardo da Vinci</strong>.</div>
+      </section>
+
+      <section class="status-panel glass" aria-live="polite">
+        <div class="status-card">
+          <h2>Status</h2>
+          <div id="statusText">Ready for your quickest Wiki jump.</div>
+        </div>
+        <div class="status-card">
+          <h2>Progress</h2>
+          <div class="progress-bar"><div id="progressFill"></div></div>
+          <div class="progress-label"><span id="visitedCount">0</span> pages checked</div>
+        </div>
+      </section>
+
+      <section class="output-panel glass">
+        <h2>Path Animation</h2>
+        <div class="path-display" id="pathDisplay">Enter a start and target to begin the adventure.</div>
+        <div class="log" id="searchLog"></div>
+      </section>
+    </main>
+
+    <footer>
+      <p>WikiFinder uses live Wikipedia links to build the shortest path. Use it as a game or a study tool!</p>
+    </footer>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
