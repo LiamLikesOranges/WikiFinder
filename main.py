@@ -205,15 +205,15 @@ class WikiFinderHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(payload_bytes)
 
 
-def run_server(port: int, directory: str):
+def run_server(host: str, port: int, directory: str):
     os.chdir(directory)
     handler = lambda *args, **kwargs: WikiFinderHTTPRequestHandler(*args, directory=directory, **kwargs)
     socketserver.TCPServer.allow_reuse_address = True
 
     for attempt in range(3):
         try:
-            with socketserver.TCPServer(('127.0.0.1', port), handler) as httpd:
-                logging.info('WikiFinder server running at http://127.0.0.1:%d', port)
+            with socketserver.TCPServer((host, port), handler) as httpd:
+                logging.info('WikiFinder server running at http://%s:%d', host, port)
                 try:
                     httpd.serve_forever()
                 except KeyboardInterrupt:
@@ -231,14 +231,17 @@ def run_server(port: int, directory: str):
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Run the WikiFinder web server.')
-    parser.add_argument('--port', '-p', type=int, default=8000, help='Port to listen on.')
+    default_host = os.environ.get('HOST', '0.0.0.0')
+    default_port = int(os.environ.get('PORT', '8000'))
+    parser.add_argument('--host', type=str, default=default_host, help='Host or IP to bind the server to.')
+    parser.add_argument('--port', '-p', type=int, default=default_port, help='Port to listen on.')
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
     logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
-    run_server(args.port, os.path.dirname(os.path.abspath(__file__)))
+    run_server(args.host, args.port, os.path.dirname(os.path.abspath(__file__)))
     return 0
 
 
