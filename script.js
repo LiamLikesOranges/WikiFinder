@@ -1,6 +1,7 @@
-const MAX_VISITED = 120;
-const MAX_DEPTH = 4;
+const MAX_VISITED = 600;
+const MAX_DEPTH = 6;
 const REQUEST_TIMEOUT_MS = 10000;
+const MAX_LINK_ROUNDS = 50;
 
 const normalizeTitle = (title) => String(title || '').trim().replace(/\s+/g, ' ');
 
@@ -75,7 +76,7 @@ async function fetchLinksFromPage(title) {
   const links = new Set();
   let continuation = null;
 
-  for (let round = 0; round < 10; round += 1) {
+  for (let round = 0; round < MAX_LINK_ROUNDS; round += 1) {
     const params = {
       action: 'query',
       prop: 'links',
