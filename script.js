@@ -1,8 +1,10 @@
-const MAX_VISITED = 35;
+const MAX_VISITED = 24;
 const MAX_DEPTH = 2;
-const REQUEST_TIMEOUT_MS = 4000;
-const MAX_LINK_ROUNDS = 4;
-const MAX_EXPANSION_PER_PAGE = 3;
+const REQUEST_TIMEOUT_MS = 3000;
+const MAX_LINK_ROUNDS = 3;
+const MAX_EXPANSION_PER_PAGE = 2;
+const FAST_MODE_MAX_DEPTH = 1;
+const FAST_MODE_MAX_EXPANSION = 1;
 
 const normalizeTitle = (title) => String(title || '').trim().replace(/\s+/g, ' ');
 
@@ -155,7 +157,7 @@ function rankLinks(links, targetTitle) {
     .map(({ candidate }) => candidate);
 }
 
-async function findShortestPathWithStats(start, target, onProgress = () => {}) {
+async function findShortestPathWithStats(start, target, onProgress = () => {}, fastMode = false) {
   const startTitle = await resolveTitle(start);
   const targetTitle = await resolveTitle(target);
   const startKey = canonicalKey(startTitle);
@@ -169,10 +171,6 @@ async function findShortestPathWithStats(start, target, onProgress = () => {}) {
   const immediatePath = findDirectLinkPath(startTitle, targetTitle, startLinks);
   if (immediatePath) {
     return { path: immediatePath, visited: 1 };
-  }
-
-  if (startLinks.length === 0) {
-    return { path: [], visited: 1 };
   }
 
   const queue = [{ title: startTitle, depth: 0 }];
@@ -194,15 +192,17 @@ async function findShortestPathWithStats(start, target, onProgress = () => {}) {
       const links = await fetchLinksFromPage(current);
       let foundTarget = null;
       const rankedLinks = rankLinks(links, targetTitle);
+      const expansionLimit = fastMode ? FAST_MODE_MAX_EXPANSION : MAX_EXPANSION_PER_PAGE;
+      const depthLimit = fastMode ? FAST_MODE_MAX_DEPTH : MAX_DEPTH;
 
-      rankedLinks.slice(0, MAX_EXPANSION_PER_PAGE).forEach((candidate) => {
+      rankedLinks.slice(0, expansionLimit).forEach((candidate) => {
         const candidateKey = canonicalKey(candidate);
         if (visited.has(candidateKey)) {
           return;
         }
 
         const nextDepth = depth + 1;
-        if (nextDepth > MAX_DEPTH) {
+        if (nextDepth > depthLimit) {
           return;
         }
 
@@ -314,7 +314,7 @@ function createAppController() {
         progressCount = visited;
         updateProgress(progressCount, MAX_VISITED);
         setStatus(`Exploring ${page}...`);
-      });
+      }, true);
       updateProgress(result.visited || progressCount, MAX_VISITED);
       appendLog(result.path.length
         ? `Path found in ${result.path.length} steps after checking ${result.visited} pages.`
