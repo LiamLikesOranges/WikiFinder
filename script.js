@@ -150,7 +150,18 @@ function scoreCandidate(candidate, targetTitle) {
   return exactMatch + overlap * 25 + prefixBonus;
 }
 
-function rankLinks(links, targetTitle) {
+async function rankLinks(links, targetTitle) {
+  if (typeof window !== 'undefined' && window.RustSearch?.rankLinksRust) {
+    try {
+      const ranked = await window.RustSearch.rankLinksRust(links, targetTitle);
+      if (Array.isArray(ranked) && ranked.length) {
+        return ranked;
+      }
+    } catch (error) {
+      console.warn('Rust ranking failed; falling back to JavaScript.', error);
+    }
+  }
+
   return [...links]
     .map((candidate) => ({ candidate, score: scoreCandidate(candidate, targetTitle) }))
     .sort((a, b) => b.score - a.score)
@@ -173,6 +184,17 @@ async function findShortestPathWithStats(start, target, onProgress = () => {}, f
     return { path: immediatePath, visited: 1 };
   }
 
+  if (typeof window !== 'undefined' && window.RustSearch?.findPathHintRust) {
+    try {
+      const hintedPath = await window.RustSearch.findPathHintRust(startTitle, targetTitle, startLinks);
+      if (Array.isArray(hintedPath) && hintedPath.length > 1) {
+        return { path: hintedPath, visited: 1 };
+      }
+    } catch (error) {
+      console.warn('Rust path hint failed; continuing with JavaScript search.', error);
+    }
+  }
+
   const queue = [{ title: startTitle, depth: 0 }];
   const visited = new Set([startKey]);
   const parents = {};
@@ -191,7 +213,7 @@ async function findShortestPathWithStats(start, target, onProgress = () => {}, f
     try {
       const links = await fetchLinksFromPage(current);
       let foundTarget = null;
-      const rankedLinks = rankLinks(links, targetTitle);
+      const rankedLinks = await rankLinks(links, targetTitle);
       const expansionLimit = fastMode ? FAST_MODE_MAX_EXPANSION : MAX_EXPANSION_PER_PAGE;
       const depthLimit = fastMode ? FAST_MODE_MAX_DEPTH : MAX_DEPTH;
 
