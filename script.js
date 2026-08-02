@@ -187,8 +187,13 @@ async function findShortestPathWithStats(start, target, onProgress = () => {}, f
   if (typeof window !== 'undefined' && window.RustSearch?.findPathHintRust) {
     try {
       const hintedPath = await window.RustSearch.findPathHintRust(startTitle, targetTitle, startLinks);
-      if (Array.isArray(hintedPath) && hintedPath.length > 1) {
-        return { path: hintedPath, visited: 1 };
+      if (Array.isArray(hintedPath) && hintedPath.length === 2) {
+        const [first, second] = hintedPath;
+        const directMatch = findDirectLinkPath(startTitle, targetTitle, startLinks);
+        const isTrueDirectLink = directMatch && directMatch[0] === first && directMatch[1] === second;
+        if (isTrueDirectLink) {
+          return { path: hintedPath, visited: 1 };
+        }
       }
     } catch (error) {
       console.warn('Rust path hint failed; continuing with JavaScript search.', error);
@@ -290,19 +295,28 @@ function createAppController() {
       pathDisplay.textContent = 'No path was found. Try a different start or target.';
       return;
     }
+
+    const flow = document.createElement('div');
+    flow.className = 'path-flow';
+
     path.forEach((title, index) => {
-      const step = document.createElement('div');
-      step.className = 'path-step';
-      const number = document.createElement('span');
-      number.innerHTML = `<strong>#${index + 1}</strong> ${title}`;
       const link = document.createElement('a');
+      link.className = 'path-link';
       link.href = pageUrl(title);
       link.target = '_blank';
       link.rel = 'noreferrer noopener';
-      link.textContent = 'Open page';
-      step.append(number, link);
-      pathDisplay.appendChild(step);
+      link.textContent = title;
+      flow.appendChild(link);
+
+      if (index < path.length - 1) {
+        const arrow = document.createElement('span');
+        arrow.className = 'path-arrow';
+        arrow.textContent = '-->';
+        flow.appendChild(arrow);
+      }
     });
+
+    pathDisplay.appendChild(flow);
   }
 
   function updateProgress(count, limit) {

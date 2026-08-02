@@ -224,23 +224,31 @@ button:hover {
   gap: 16px;
 }
 
-.path-step {
+.path-flow {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 14px 18px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  gap: 10px;
+  font-size: 1.05rem;
+  line-height: 1.7;
 }
 
-.path-step span {
-  color: var(--text);
+.path-link {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+  transition: color 0.2s ease, transform 0.2s ease;
 }
 
-.path-step small {
+.path-link:hover {
+  color: #b8f8dc;
+  transform: translateY(-1px);
+  text-decoration: underline;
+}
+
+.path-arrow {
   color: var(--muted);
+  font-size: 1.2rem;
 }
 
 .log {
