@@ -173,7 +173,16 @@ function findDirectLinkPath(startTitle, targetTitle, links) {
 
   const normalizedTarget = canonicalKey(targetTitle);
   const directMatch = links.find((candidate) => canonicalKey(candidate) === normalizedTarget);
-  if (directMatch) {
+  if (!directMatch) {
+    return null;
+  }
+
+  const targetTokens = normalizedTarget.split(/[^a-z0-9]+/).filter(Boolean);
+  const directTokens = canonicalKey(directMatch).split(/[^a-z0-9]+/).filter(Boolean);
+  const hasMeaningfulOverlap = targetTokens.some((token) => directTokens.includes(token));
+  const isExactTitle = canonicalKey(directMatch) === normalizedTarget;
+
+  if (isExactTitle && hasMeaningfulOverlap) {
     return [startTitle, directMatch];
   }
 
@@ -279,8 +288,11 @@ async function findShortestPathWithStats(start, target, onProgress = () => {}, f
       const links = await fetchLinksFromPage(current);
       const directHit = links.find((candidate) => canonicalKey(candidate) === targetKey);
       if (directHit) {
-        parents[directHit] = current;
-        return { path: buildPathFromParents(directHit, parents), visited: visitedCount };
+        const directPath = findDirectLinkPath(current, targetTitle, links);
+        if (directPath) {
+          parents[directPath[1]] = directPath[0];
+          return { path: buildPathFromParents(directPath[1], parents), visited: visitedCount };
+        }
       }
 
       links.forEach((candidate) => {
