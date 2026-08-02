@@ -1,7 +1,8 @@
-const MAX_VISITED = 220;
-const MAX_DEPTH = 4;
-const REQUEST_TIMEOUT_MS = 10000;
-const MAX_LINK_ROUNDS = 20;
+const MAX_VISITED = 35;
+const MAX_DEPTH = 2;
+const REQUEST_TIMEOUT_MS = 4000;
+const MAX_LINK_ROUNDS = 4;
+const MAX_EXPANSION_PER_PAGE = 3;
 
 const normalizeTitle = (title) => String(title || '').trim().replace(/\s+/g, ' ');
 
@@ -170,6 +171,10 @@ async function findShortestPathWithStats(start, target, onProgress = () => {}) {
     return { path: immediatePath, visited: 1 };
   }
 
+  if (startLinks.length === 0) {
+    return { path: [], visited: 1 };
+  }
+
   const queue = [{ title: startTitle, depth: 0 }];
   const visited = new Set([startKey]);
   const parents = {};
@@ -190,7 +195,7 @@ async function findShortestPathWithStats(start, target, onProgress = () => {}) {
       let foundTarget = null;
       const rankedLinks = rankLinks(links, targetTitle);
 
-      rankedLinks.slice(0, 8).forEach((candidate) => {
+      rankedLinks.slice(0, MAX_EXPANSION_PER_PAGE).forEach((candidate) => {
         const candidateKey = canonicalKey(candidate);
         if (visited.has(candidateKey)) {
           return;
