@@ -202,6 +202,13 @@ button:hover {
   font-size: 0.95rem;
 }
 
+.subtle-text {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
 .output-panel {
   display: grid;
   gap: 20px;

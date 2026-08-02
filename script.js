@@ -246,8 +246,10 @@ function createAppController() {
   const findButton = document.getElementById('findButton');
   const resetButton = document.getElementById('resetButton');
   const statusText = document.getElementById('statusText');
+  const currentPageText = document.getElementById('currentPageText');
   const progressFill = document.getElementById('progressFill');
   const visitedCountText = document.getElementById('visitedCount');
+  const progressHint = document.getElementById('progressHint');
   const searchLog = document.getElementById('searchLog');
   const pathDisplay = document.getElementById('pathDisplay');
 
@@ -291,12 +293,18 @@ function createAppController() {
     statusText.textContent = text;
   }
 
+  function setCurrentPage(text) {
+    currentPageText.textContent = text;
+  }
+
   function resetUI() {
     searchLog.innerHTML = '';
     pathDisplay.innerHTML = 'Enter a start and target to begin the adventure.';
     progressFill.style.width = '0%';
     visitedCountText.textContent = '0';
+    setCurrentPage('Waiting for a search.');
     setStatus('Ready for your quickest Wiki jump.');
+    progressHint.textContent = 'Fast mode focuses on the most promising next steps.';
   }
 
   function getModeSettings() {
@@ -313,6 +321,10 @@ function createAppController() {
     findButton.disabled = true;
     resetButton.disabled = true;
     setStatus(`Launching ${mode.label.toLowerCase()}...`);
+    setCurrentPage('Preparing search...');
+    progressHint.textContent = mode.fastMode
+      ? 'Fast mode narrows the search to the most promising next links.'
+      : 'Balanced mode explores a slightly wider set of promising links.';
     searchLog.innerHTML = '';
     pathDisplay.innerHTML = 'Searching for the fastest path...';
 
@@ -321,6 +333,7 @@ function createAppController() {
       const result = await findShortestPathWithStats(start, target, (visited, page) => {
         progressCount = visited;
         updateProgress(progressCount, MAX_VISITED);
+        setCurrentPage(page);
         setStatus(`${mode.label}: exploring ${page}...`);
       }, mode.fastMode);
       updateProgress(result.visited || progressCount, MAX_VISITED);
