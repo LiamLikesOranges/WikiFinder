@@ -242,6 +242,7 @@ function createAppController() {
 
   const startInput = document.getElementById('start');
   const targetInput = document.getElementById('target');
+  const modeSelect = document.getElementById('mode');
   const findButton = document.getElementById('findButton');
   const resetButton = document.getElementById('resetButton');
   const statusText = document.getElementById('statusText');
@@ -298,13 +299,20 @@ function createAppController() {
     setStatus('Ready for your quickest Wiki jump.');
   }
 
+  function getModeSettings() {
+    return modeSelect.value === 'balanced'
+      ? { fastMode: false, label: 'Balanced mode' }
+      : { fastMode: true, label: 'Fast mode' };
+  }
+
   findButton.addEventListener('click', async () => {
     const start = startInput.value;
     const target = targetInput.value;
+    const mode = getModeSettings();
 
     findButton.disabled = true;
     resetButton.disabled = true;
-    setStatus('Launching the search engine...');
+    setStatus(`Launching ${mode.label.toLowerCase()}...`);
     searchLog.innerHTML = '';
     pathDisplay.innerHTML = 'Searching for the fastest path...';
 
@@ -313,8 +321,8 @@ function createAppController() {
       const result = await findShortestPathWithStats(start, target, (visited, page) => {
         progressCount = visited;
         updateProgress(progressCount, MAX_VISITED);
-        setStatus(`Exploring ${page}...`);
-      }, true);
+        setStatus(`${mode.label}: exploring ${page}...`);
+      }, mode.fastMode);
       updateProgress(result.visited || progressCount, MAX_VISITED);
       appendLog(result.path.length
         ? `Path found in ${result.path.length} steps after checking ${result.visited} pages.`
@@ -322,11 +330,11 @@ function createAppController() {
 
       if (!result.path.length) {
         renderPath([]);
-        setStatus('No path found within the search limit. Keep exploring!');
+        setStatus(`No path found in ${mode.label.toLowerCase()}. Try a different pair.`);
         appendLog('Try another pair of pages or use a more popular starting point.');
       } else {
         renderPath(result.path);
-        setStatus(`Found a path in ${result.path.length} hops!`);
+        setStatus(`${mode.label}: found a path in ${result.path.length} hops!`);
         appendLog('Enjoy the journey! Each step is one Wikipedia link away.', true);
       }
     } catch (error) {
