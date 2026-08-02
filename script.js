@@ -361,6 +361,10 @@ function createAppController() {
       return;
     }
 
+    const label = document.createElement('div');
+    label.className = 'path-label';
+    label.textContent = 'Path:';
+
     const flow = document.createElement('div');
     flow.className = 'path-flow';
 
@@ -381,6 +385,7 @@ function createAppController() {
       }
     });
 
+    pathDisplay.appendChild(label);
     pathDisplay.appendChild(flow);
   }
 

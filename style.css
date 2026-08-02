@@ -224,6 +224,13 @@ button:hover {
   gap: 16px;
 }
 
+.path-label {
+  color: var(--muted);
+  font-size: 0.85rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
 .path-flow {
   display: flex;
   flex-wrap: wrap;
