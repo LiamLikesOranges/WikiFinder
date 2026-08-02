@@ -125,6 +125,47 @@ function buildPathFromParents(target, parents) {
   return path;
 }
 
+function findShortestPathInGraph(startTitle, targetTitle, adjacencyMap) {
+  if (!startTitle || !targetTitle || !adjacencyMap) {
+    return [];
+  }
+
+  const startKey = canonicalKey(startTitle);
+  const targetKey = canonicalKey(targetTitle);
+
+  if (startKey === targetKey) {
+    return [startTitle];
+  }
+
+  const queue = [startTitle];
+  const visited = new Set([startKey]);
+  const parents = {};
+
+  while (queue.length) {
+    const current = queue.shift();
+    const currentKey = canonicalKey(current);
+    const neighbors = adjacencyMap[currentKey] || adjacencyMap[current] || [];
+
+    for (const neighbor of neighbors) {
+      const neighborKey = canonicalKey(neighbor);
+      if (visited.has(neighborKey)) {
+        continue;
+      }
+
+      visited.add(neighborKey);
+      parents[neighborKey] = currentKey;
+
+      if (neighborKey === targetKey) {
+        return buildPathFromParents(neighborKey, parents);
+      }
+
+      queue.push(neighbor);
+    }
+  }
+
+  return [];
+}
+
 function findDirectLinkPath(startTitle, targetTitle, links) {
   if (!Array.isArray(links)) {
     return null;
@@ -139,9 +180,45 @@ function findDirectLinkPath(startTitle, targetTitle, links) {
   return null;
 }
 
+function isCandidateRelevant(candidate, targetTitle) {
+  const candidateKey = canonicalKey(candidate);
+  const targetKey = canonicalKey(targetTitle);
+
+  if (!candidateKey || !targetKey) {
+    return false;
+  }
+
+  if (candidateKey === targetKey) {
+    return true;
+  }
+
+  const candidateTokens = candidateKey.split(/[^a-z0-9]+/).filter(Boolean);
+  const targetTokens = targetKey.split(/[^a-z0-9]+/).filter(Boolean);
+
+  if (!candidateTokens.length || !targetTokens.length) {
+    return false;
+  }
+
+  const overlap = targetTokens.filter((token) => candidateTokens.includes(token)).length;
+  const hasSharedBigram = candidateTokens.some((token, index) => {
+    const nextToken = candidateTokens[index + 1];
+    return nextToken && targetTokens.includes(`${token} ${nextToken}`);
+  });
+
+  const candidateHasTargetToken = targetTokens.some((token) => candidateKey.includes(token));
+  const targetHasCandidateToken = candidateTokens.some((token) => targetKey.includes(token));
+  const strongOverlap = overlap > 0 && (candidateHasTargetToken || targetHasCandidateToken);
+
+  return strongOverlap || hasSharedBigram;
+}
+
 function scoreCandidate(candidate, targetTitle) {
   const candidateKey = canonicalKey(candidate);
   const targetKey = canonicalKey(targetTitle);
+
+  if (!isCandidateRelevant(candidate, targetTitle)) {
+    return -Infinity;
+  }
 
   const tokens = targetKey.split(/\s+/).filter(Boolean);
   const overlap = tokens.filter((token) => candidateKey.includes(token)).length;
@@ -164,6 +241,7 @@ async function rankLinks(links, targetTitle) {
 
   return [...links]
     .map((candidate) => ({ candidate, score: scoreCandidate(candidate, targetTitle) }))
+    .filter(({ score }) => Number.isFinite(score) && score > -Infinity)
     .sort((a, b) => b.score - a.score)
     .map(({ candidate }) => candidate);
 }
@@ -179,31 +257,13 @@ async function findShortestPathWithStats(start, target, onProgress = () => {}, f
   }
 
   const startLinks = await fetchLinksFromPage(startTitle);
-  const immediatePath = findDirectLinkPath(startTitle, targetTitle, startLinks);
-  if (immediatePath) {
-    return { path: immediatePath, visited: 1 };
-  }
-
-  if (typeof window !== 'undefined' && window.RustSearch?.findPathHintRust) {
-    try {
-      const hintedPath = await window.RustSearch.findPathHintRust(startTitle, targetTitle, startLinks);
-      if (Array.isArray(hintedPath) && hintedPath.length === 2) {
-        const [first, second] = hintedPath;
-        const directMatch = findDirectLinkPath(startTitle, targetTitle, startLinks);
-        const isTrueDirectLink = directMatch && directMatch[0] === first && directMatch[1] === second;
-        if (isTrueDirectLink) {
-          return { path: hintedPath, visited: 1 };
-        }
-      }
-    } catch (error) {
-      console.warn('Rust path hint failed; continuing with JavaScript search.', error);
-    }
-  }
 
   const queue = [{ title: startTitle, depth: 0 }];
   const visited = new Set([startKey]);
   const parents = {};
   let visitedCount = 0;
+
+  const depthLimit = fastMode ? FAST_MODE_MAX_DEPTH : MAX_DEPTH;
 
   while (queue.length && visitedCount < MAX_VISITED) {
     const { title: current, depth } = queue.shift();
@@ -217,14 +277,15 @@ async function findShortestPathWithStats(start, target, onProgress = () => {}, f
 
     try {
       const links = await fetchLinksFromPage(current);
-      let foundTarget = null;
-      const rankedLinks = await rankLinks(links, targetTitle);
-      const expansionLimit = fastMode ? FAST_MODE_MAX_EXPANSION : MAX_EXPANSION_PER_PAGE;
-      const depthLimit = fastMode ? FAST_MODE_MAX_DEPTH : MAX_DEPTH;
+      const directHit = links.find((candidate) => canonicalKey(candidate) === targetKey);
+      if (directHit) {
+        parents[directHit] = current;
+        return { path: buildPathFromParents(directHit, parents), visited: visitedCount };
+      }
 
-      rankedLinks.slice(0, expansionLimit).forEach((candidate) => {
+      links.forEach((candidate) => {
         const candidateKey = canonicalKey(candidate);
-        if (visited.has(candidateKey)) {
+        if (!candidate || visited.has(candidateKey) || candidateKey === startKey) {
           return;
         }
 
@@ -235,16 +296,8 @@ async function findShortestPathWithStats(start, target, onProgress = () => {}, f
 
         visited.add(candidateKey);
         parents[candidate] = current;
-        if (candidateKey === targetKey) {
-          foundTarget = candidate;
-          return;
-        }
         queue.push({ title: candidate, depth: nextDepth });
       });
-
-      if (foundTarget) {
-        return { path: buildPathFromParents(foundTarget, parents), visited: visitedCount };
-      }
     } catch (error) {
       throw new Error(`Wikipedia API request failed: ${error.message}`);
     }
@@ -418,6 +471,8 @@ if (typeof module !== 'undefined' && module.exports) {
     canonicalKey,
     buildPathFromParents,
     findDirectLinkPath,
+    findShortestPathInGraph,
+    isCandidateRelevant,
     rankLinks,
     findShortestPath,
     findShortestPathWithStats,
@@ -431,6 +486,8 @@ if (typeof window !== 'undefined') {
     canonicalKey,
     buildPathFromParents,
     findDirectLinkPath,
+    findShortestPathInGraph,
+    isCandidateRelevant,
     rankLinks,
     findShortestPath,
     findShortestPathWithStats,
